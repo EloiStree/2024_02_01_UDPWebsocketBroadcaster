@@ -1,14 +1,45 @@
-﻿using System;
+﻿using Newtonsoft.Json;
+using System;
 using System.Collections.Concurrent;
+using System.Diagnostics;
 using System.Net;
 using System.Net.Sockets;
 using System.Net.WebSockets;
+using System.Runtime.InteropServices;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
+using static WebSocketServer;
+
+
+public class HideWindow {
+
+    // Import the ShowWindow function from user32.dll
+    [DllImport("user32.dll")]
+    private static extern bool ShowWindow(IntPtr hWnd, int nCmdShow);
+
+    private const int SW_MINIMIZE = 6;
+    public static void MinimizeConsoleWindow()
+    {
+        IntPtr handle = Process.GetCurrentProcess().MainWindowHandle;
+        ShowWindow(handle, SW_MINIMIZE);
+    }
+}
 
 class WebSocketServer
 {
+
+    public class AppConfig
+    {
+
+        public int m_portOfServer = 7070;
+        public int m_portToListen = 7071;
+        public bool m_useRebroadcastLastMessage = false;
+        public bool m_displayIpAddresses=true;
+
+        public static AppConfig Configuration = new AppConfig();
+    }
+
     private const int BufferSize = 4096;
     private HttpListener httpListener;
     private UdpClient udpListener;
@@ -27,6 +58,7 @@ class WebSocketServer
         Console.WriteLine("WebSocket server is running...");
 
         // Start a background task to broadcast messages every 1 second
+        if (AppConfig.Configuration.m_useRebroadcastLastMessage)
         Task.Run(() => BroadcastMessages());
 
         // Start a background task to listen for UDP messages
@@ -175,12 +207,28 @@ public class TimeWatch
     public static double GetSeconds() { return (m_endTime - m_startTime).TotalSeconds; }
 }
 
+
 class Program
 {
+    public static string m_configFileRelativePath = "ConfigBroadcaster.json";
     static async Task Main(string[] args)
     {
-        string httpListenerPrefix = "http://localhost:7070/";
-        int udpListenerPort = 12345;
+
+        if(!File.Exists(m_configFileRelativePath))
+            File.WriteAllText(m_configFileRelativePath, JsonConvert.SerializeObject(AppConfig.Configuration));
+
+        string configUsed = File.ReadAllText(m_configFileRelativePath);
+        Console.WriteLine(configUsed);
+        AppConfig.Configuration = JsonConvert.DeserializeObject<AppConfig>(configUsed);
+
+
+        if (AppConfig.Configuration.m_displayIpAddresses)
+            NetworkInfo.DisplayConnectedLocalIPs();
+
+
+        HideWindow.MinimizeConsoleWindow();
+        string httpListenerPrefix = $"http://localhost:{AppConfig.Configuration.m_portOfServer}/";
+        int udpListenerPort = AppConfig.Configuration.m_portToListen;
 
         WebSocketServer server = new WebSocketServer();
         await server.Start(httpListenerPrefix, udpListenerPort);
