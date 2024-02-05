@@ -6,7 +6,7 @@ using System.Threading.Tasks;
 
 class WebSocketClient
 {
-    private const string ServerUri = "ws://localhost:8080/";
+    private const string ServerUri = "ws://81.240.94.97:7070/";
 
     public async Task ConnectAndRun()
     {

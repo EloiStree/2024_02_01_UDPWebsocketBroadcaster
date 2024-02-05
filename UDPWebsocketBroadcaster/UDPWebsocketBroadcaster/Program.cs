@@ -227,7 +227,7 @@ class Program
 
 
         HideWindow.MinimizeConsoleWindow();
-        string httpListenerPrefix = $"http://localhost:{AppConfig.Configuration.m_portOfServer}/";
+        string httpListenerPrefix = $"http://*:{AppConfig.Configuration.m_portOfServer}/";
         int udpListenerPort = AppConfig.Configuration.m_portToListen;
 
         WebSocketServer server = new WebSocketServer();
