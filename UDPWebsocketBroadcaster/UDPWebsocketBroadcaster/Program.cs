@@ -36,6 +36,8 @@ class WebSocketServer
         public int m_portToListen = 7071;
         public bool m_useRebroadcastLastMessage = false;
         public bool m_displayIpAddresses=true;
+        public bool m_useConsolePrint = false;
+        public bool m_valueTypeIsByte = true;
 
         public static AppConfig Configuration = new AppConfig();
     }
@@ -44,7 +46,7 @@ class WebSocketServer
     private HttpListener httpListener;
     private UdpClient udpListener;
     private readonly ConcurrentDictionary<string, WebSocket> connectedClients = new ConcurrentDictionary<string, WebSocket>();
-    private string broadcastMessage = "Default broadcast message";
+
 
     public async Task Start(string httpListenerPrefix, int udpListenerPort)
     {
@@ -58,9 +60,9 @@ class WebSocketServer
         Console.WriteLine("WebSocket server is running...");
 
         // Start a background task to broadcast messages every 1 second
-        if (AppConfig.Configuration.m_useRebroadcastLastMessage)
-        Task.Run(() => BroadcastMessages());
+        //if (AppConfig.Configuration.m_useRebroadcastLastMessage)
 
+        //    Task.Run(() => broad());
         // Start a background task to listen for UDP messages
         Task.Run(() => ListenForUdpMessages());
 
@@ -98,7 +100,9 @@ class WebSocketServer
 
                 if (result.MessageType == WebSocketMessageType.Text)
                 {
+
                     string receivedMessage = Encoding.UTF8.GetString(buffer, 0, result.Count);
+                    if(AppConfig.Configuration.m_useConsolePrint)
                     Console.WriteLine($"Received message from {clientId}: {receivedMessage}");
 
                     // You can handle the received message here if needed
@@ -116,37 +120,6 @@ class WebSocketServer
         }
     }
 
-    private async Task BroadcastMessages()
-    {
-        while (true)
-        {
-            foreach (var client in connectedClients)
-            {
-                try
-                {
-                    if (client.Value.State == WebSocketState.Open)
-                    {
-                        string message = broadcastMessage;
-                        byte[] messageBytes = Encoding.UTF8.GetBytes(message);
-
-                        await client.Value.SendAsync(new ArraySegment<byte>(messageBytes), WebSocketMessageType.Text, true, CancellationToken.None);
-                    }
-                    else
-                    {
-                        // Remove disconnected client
-                        connectedClients.TryRemove(client.Key, out _);
-                    }
-                }
-                catch (Exception ex)
-                {
-                    Console.WriteLine($"Failed to broadcast message to client {client.Key}: {ex.Message}");
-                }
-            }
-
-            // Wait for 1 second before sending the next broadcast
-            await Task.Delay(1000);
-        }
-    }
 
     private async Task ListenForUdpMessages()
     {
@@ -154,37 +127,76 @@ class WebSocketServer
         {
             UdpReceiveResult result = await udpListener.ReceiveAsync();
 
-            string udpMessage = Encoding.UTF8.GetString(result.Buffer);
-            TimeWatch.Start();
-
-            Console.WriteLine($"Received UDP message: {udpMessage}");
-
-            // Set the broadcast message to the received UDP message
-            broadcastMessage = udpMessage;
-
-            // Broadcast the UDP message to connected WebSocket clients
-            foreach (var client in connectedClients)
+            if (AppConfig.Configuration.m_valueTypeIsByte)
             {
-                try
+                byte[] byteToBroadcast= result.Buffer;
+                TimeWatch.Start();
+
+                if (AppConfig.Configuration.m_useConsolePrint)
+
+                    Console.WriteLine($"Byte Received lenght: {byteToBroadcast.Length}");
+
+                // Broadcast the UDP message to connected WebSocket clients
+                foreach (var client in connectedClients)
                 {
-                    if (client.Value.State == WebSocketState.Open)
+                    try
                     {
-                        byte[] udpMessageBytes = Encoding.UTF8.GetBytes(udpMessage);
-                        await client.Value.SendAsync(new ArraySegment<byte>(udpMessageBytes), WebSocketMessageType.Text, true, CancellationToken.None);
+                        if (client.Value.State == WebSocketState.Open)
+                        {
+                            
+                            await client.Value.SendAsync(new ArraySegment<byte>(byteToBroadcast), WebSocketMessageType.Binary, true, CancellationToken.None);
+                        }
+                        else
+                        {
+                            // Remove disconnected client
+                            connectedClients.TryRemove(client.Key, out _);
+                        }
                     }
-                    else
+                    catch (Exception ex)
                     {
-                        // Remove disconnected client
-                        connectedClients.TryRemove(client.Key, out _);
+                        Console.WriteLine($"Failed to send UDP message to client {client.Key}: {ex.Message}");
                     }
                 }
-                catch (Exception ex)
-                {
-                    Console.WriteLine($"Failed to send UDP message to client {client.Key}: {ex.Message}");
-                }
+                TimeWatch.End();
+                if (AppConfig.Configuration.m_useConsolePrint)
+
+                    Console.WriteLine($"TimeWatch (Read and push): {TimeWatch.GetSeconds()}");
             }
-            TimeWatch.End();
-            Console.WriteLine($"Push UDP to clients (Read and push): {TimeWatch.GetSeconds()}");
+            else {
+                string udpMessage = Encoding.UTF8.GetString(result.Buffer);
+                TimeWatch.Start();
+
+                if (AppConfig.Configuration.m_useConsolePrint)
+
+                    Console.WriteLine($"Received UDP message: {udpMessage}");
+
+                // Broadcast the UDP message to connected WebSocket clients
+                foreach (var client in connectedClients)
+                {
+                    try
+                    {
+                        if (client.Value.State == WebSocketState.Open)
+                        {
+                            byte[] udpMessageBytes = Encoding.UTF8.GetBytes(udpMessage);
+                            await client.Value.SendAsync(new ArraySegment<byte>(udpMessageBytes), WebSocketMessageType.Text, true, CancellationToken.None);
+                        }
+                        else
+                        {
+                            // Remove disconnected client
+                            connectedClients.TryRemove(client.Key, out _);
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        Console.WriteLine($"Failed to send UDP message to client {client.Key}: {ex.Message}");
+                    }
+                }
+                TimeWatch.End();
+                if (AppConfig.Configuration.m_useConsolePrint)
+
+                    Console.WriteLine($"TimeWatch (Read and push): {TimeWatch.GetSeconds()}");
+            }
+           
 
         }
     }
